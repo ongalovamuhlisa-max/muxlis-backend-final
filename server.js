@@ -1,4 +1,19 @@
-const express = require('express');
+// O'qituvchilar va ularning parollari
+const admins = {
+    "matematika_ustoz": "math777",
+    "ona_tili_ustoz": "tili2026",
+    "fizika_ustoz": "fizik88"
+};
+
+// Admin login yo'lagi
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    if (admins[username] && admins[username] === password) {
+        res.json({ success: true, teacher: username });
+    } else {
+        res.status(401).json({ success: false, message: "Login yoki parol xato!" });
+    }
+});const express = require('express');
 const cors = require('cors');
 const app = express();
 app.use(cors());
@@ -50,3 +65,4 @@ app.post('/api/finish', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Miyali Server ${PORT}da ishga tushdi!`));
+
