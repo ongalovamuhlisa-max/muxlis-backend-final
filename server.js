@@ -1,54 +1,70 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
-
 const app = express();
-
-// Middleware - Frontenddan kelayotgan JSON va So'rovlarni qabul qilish uchun
 app.use(cors());
 app.use(express.json());
 
-// Testlar saqlanadigan massiv (Baza)
-let tests = [
-  {
-    _id: "1",
-    question: "React-da 'state' nima uchun ishlatiladi?",
-    options: ["Ma'lumotlarni saqlash", "Dizayn berish", "Serverni yoqish", "Hech nima"],
-    answer: "Ma'lumotlarni saqlash"
-  }
-];
+// BAZA (Vaqtinchalik xotira)
+let users = {}; // { "ID": "Ism" }
+let completedTests = {}; // { "ID": { "Fan": Ball } }
+let testSettings = {
+    questions: [],
+    duration: 45,
+    subjectName: "Matematika" // Admin buni o'zgartira oladi
+};
 
-// 1. GET - Barcha testlarni frontendga yuborish
-app.get('/api/tests', (req, res) => {
-  res.status(200).json(tests);
+// --- STUDENTLAR UCHUN ---
+
+// Login (ID va Ismni "muhrlash")
+app.post('/api/auth', (req, res) => {
+    const { id, name } = req.body;
+    const currentSubject = testSettings.subjectName;
+
+    if (!id || !name) return res.status(400).json({ message: "ID va Ismni yozing!" });
+
+    // 1. Ism va ID mosligini tekshirish
+    if (users[id]) {
+        if (users[id] !== name) {
+            return res.status(403).json({ message: `Bu ID ${users[id]}ga tegishli!` });
+        }
+    } else {
+        users[id] = name; // Yangi o'quvchini ro'yxatga olish
+    }
+
+    // 2. Shu fandan topshirganini tekshirish
+    if (completedTests[id] && completedTests[id][currentSubject] !== undefined) {
+        return res.status(403).json({ message: `Siz ${currentSubject}dan topshirib bo'lgansiz!` });
+    }
+
+    res.json({ message: "Xush kelibsiz", userName: users[id], subject: currentSubject });
 });
 
-// 2. POST - Yangi testni qabul qilib bazaga qo'shish
-app.post('/api/tests', (req, res) => {
-  const { question, options, answer } = req.body;
+// Test ma'lumotlarini olish
+app.get('/api/tests', (req, res) => res.json(testSettings));
 
-  // Ma'lumotlar to'liqligini tekshirish (Validator)
-  if (!question || !options || !answer || !Array.isArray(options)) {
-    return res.status(400).json({ 
-      error: "Xato! Savol, variantlar va to'g'ri javob bo'lishi shart." 
-    });
-  }
-
-  // Yangi obyekt yaratish
-  const newTest = {
-    _id: Math.random().toString(36).substr(2, 9),
-    question,
-    options,
-    answer
-  };
-
-  tests.push(newTest); // Massivga qo'shish
-  console.log("Yangi test qo'shildi:", newTest);
-  
-  res.status(201).json(newTest);
+// Natijani saqlash
+app.post('/api/finish', (req, res) => {
+    const { id, score } = req.body;
+    const currentSubject = testSettings.subjectName;
+    if (!completedTests[id]) completedTests[id] = {};
+    completedTests[id][currentSubject] = score;
+    res.json({ message: "Saqlandi" });
 });
 
-// 3. Serverni yoqish
+// --- ADMIN UCHUN ---
+
+// Savollarni, Vaqtni va FAN NOMINI yangilash
+app.post('/api/admin/setup', (req, res) => {
+    const { questions, duration, subjectName } = req.body;
+    testSettings = { questions, duration, subjectName };
+    res.json({ message: "Hammasi yangilandi!" });
+});
+
+// Barcha natijalarni ko'rish
+app.get('/api/admin/results', (req, res) => {
+    res.json({ students: users, grades: completedTests });
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server ${PORT}-portda muvaffaqiyatli ishga tushdi!`);
-});
+app.listen(PORT, () => console.log(`Server ${PORT}-portda tayyor!`));
+
