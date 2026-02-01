@@ -1,11 +1,25 @@
-// O'qituvchilar va ularning parollari
+const express = require('express');
+const cors = require('cors');
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// 1. MA'LUMOTLAR OMBORI (Vaqtinchalik RAMda)
+let allTests = {}; // Fanlar papkasi
+let users = {}; 
+let completedResults = []; // Kim necha ball oldi
+
+// 2. ADMINLAR RO'YXATI (Ustozlar)
 const admins = {
     "matematika_ustoz": "math777",
     "ona_tili_ustoz": "tili2026",
     "fizika_ustoz": "fizik88"
 };
 
-// Admin login yo'lagi
+// --- ADMIN YO'LAKLARI ---
+
+// Login tekshirish
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
     if (admins[username] && admins[username] === password) {
@@ -13,33 +27,31 @@ app.post('/api/admin/login', (req, res) => {
     } else {
         res.status(401).json({ success: false, message: "Login yoki parol xato!" });
     }
-});const express = require('express');
-const cors = require('cors');
-const app = express();
-app.use(cors());
-app.use(express.json());
+});
 
-// MIYA: Endi ma'lumotlar fan nomi ostida papkalarda saqlanadi
-let allTests = {}; // { "Matematika": {questions, duration}, "Tarix": {...} }
-let users = {}; 
-let completedTests = {}; 
-
-// --- ADMIN UCHUN: Testni fan nomi bilan saqlash ---
+// Testni saqlash (Fan nomi bilan)
 app.post('/api/admin/setup', (req, res) => {
     const { questions, duration, subjectName } = req.body;
-    if (!subjectName) return res.status(400).json({ message: "Fan nomini yozing!" });
+    if (!subjectName) return res.status(400).json({ message: "Fan nomi yo'q!" });
     
-    // Fan nomi bo'yicha alohida joy ajratamiz
     allTests[subjectName] = { questions, duration };
-    res.json({ message: `${subjectName} fani uchun test muvaffaqiyatli yaratildi!` });
+    console.log(`${subjectName} fani saqlandi.`);
+    res.json({ message: "Test saqlandi!" });
 });
 
-// --- STUDENT UCHUN: Faol fanlar ro'yxatini olish ---
+// Natijalarni ko'rish (Admin uchun)
+app.get('/api/admin/results', (req, res) => {
+    res.json(completedResults);
+});
+
+// --- STUDENT YO'LAKLARI ---
+
+// Hamma faol fanlarni olish
 app.get('/api/subjects', (req, res) => {
-    res.json(Object.keys(allTests)); // Faqat fan nomlarini yuboradi ["Matematika", "Tarix"]
+    res.json(Object.keys(allTests));
 });
 
-// --- STUDENT UCHUN: Tanlangan testni yuklash ---
+// Tanlangan testni yuklash
 app.get('/api/tests/:subject', (req, res) => {
     const subject = req.params.subject;
     if (allTests[subject]) {
@@ -49,20 +61,22 @@ app.get('/api/tests/:subject', (req, res) => {
     }
 });
 
-// Auth va Finish kodlari o'sha-o'sha qoladi...
-app.post('/api/auth', (req, res) => {
-    const { id, name } = req.body;
-    if (!users[id]) users[id] = name;
-    res.json({ message: "OK", userName: users[id] });
-});
-
+// Testni tugatib natijani yuborish
 app.post('/api/finish', (req, res) => {
-    const { id, score, subject } = req.body;
-    if (!completedTests[id]) completedTests[id] = {};
-    completedTests[id][subject] = score;
-    res.json({ message: "Natija saqlandi" });
+    const { id, name, score, subject } = req.body;
+    const result = {
+        studentId: id,
+        studentName: name,
+        subject: subject,
+        score: score,
+        date: new Date().toLocaleString()
+    };
+    completedResults.push(result);
+    res.json({ message: "Natija qabul qilindi!" });
 });
 
+// SERVERNI YOQISH
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Miyali Server ${PORT}da ishga tushdi!`));
-
+app.listen(PORT, () => {
+    console.log(`🔥 Server ${PORT}-portda olov bo'lib yonayapti!`);
+});
