@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -149,4 +148,5 @@ app.post('/api/student/submit', async (req, res) => {
 
 // Port sozlamasi (Render uchun muhim)
 const
+
 
