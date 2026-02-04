@@ -3,7 +3,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const app = express();
 
-// 1. CORS sozlamasi - Vercel bilan bog'lanish uchun
+// 1. CORS sozlamasi
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -44,9 +44,8 @@ const Result = mongoose.model('Result', new mongoose.Schema({
 const SECRET_CODE = "MAKTAB2026";
 
 // 4. API Yo'laklari
-app.get('/', (req, res) => res.send("🚀 Server is live and running!"));
+app.get('/', (req, res) => res.send("🚀 Server is live!"));
 
-// Ro'yxatdan o'tish
 app.post('/api/admin/register', async (req, res) => {
     try {
         const { username, password, secretCode } = req.body;
@@ -57,33 +56,24 @@ app.post('/api/admin/register', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// LOGIN QISMI (ENG MUHIMI)
 app.post('/api/admin/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-
-        // Statik kirish (Test uchun)
         if (username === "admin" && password === "123") {
             return res.json({ success: true, teacher: "admin" });
         }
-
-        // Bazadan qidirish
         const teacher = await Teacher.findOne({ 
             username: username ? username.trim() : "", 
             password: password ? password.trim() : "" 
         });
-
         if (teacher) {
             res.json({ success: true, teacher: teacher.username });
         } else {
-            res.status(401).json({ success: false, message: "Login yoki parol xato!" });
+            res.status(401).json({ success: false });
         }
-    } catch (err) { 
-        res.status(500).json({ message: "Server xatosi" }); 
-    }
+    } catch (err) { res.status(500).json({ message: "Xato" }); }
 });
 
-// Test saqlash
 app.post('/api/admin/setup', async (req, res) => {
     try {
         const { teacher, questions, duration, subjectName } = req.body;
@@ -96,7 +86,6 @@ app.post('/api/admin/setup', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Natijalar
 app.get('/api/admin/results', async (req, res) => {
     try {
         const results = await Result.find().sort({ _id: -1 });
@@ -104,7 +93,6 @@ app.get('/api/admin/results', async (req, res) => {
     } catch (err) { res.status(500).json([]); }
 });
 
-// Ustozlar/Fanlar
 app.get('/api/subjects', async (req, res) => {
     try {
         const tests = await Test.find({}, { teacher: 1 });
@@ -113,7 +101,6 @@ app.get('/api/subjects', async (req, res) => {
     } catch (err) { res.status(500).json([]); }
 });
 
-// Test yuklash
 app.get('/api/get-teacher-test/:teacherName', async (req, res) => {
     try {
         const test = await Test.findOne({ teacher: req.params.teacherName });
@@ -121,6 +108,15 @@ app.get('/api/get-teacher-test/:teacherName', async (req, res) => {
     } catch (err) { res.status(500).send("Xato"); }
 });
 
-// Natija topshirish
-app.post('/api/student/submit', async (
+app.post('/api/student/submit', async (req, res) => {
+    try {
+        const newResult = new Result(req.body);
+        await newResult.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+// 5. Portni ochish
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server ${PORT} portda tayyor!`));
 
