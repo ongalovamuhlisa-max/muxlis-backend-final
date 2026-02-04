@@ -1,31 +1,42 @@
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// --- 🧠 MA'LUMOTLAR OMBORI (RAM) ---
+// --- 🔌 MONGODB ULANISHI ---
+const MONGO_URI = "mongodb+srv://adminmuxlis08:parol123@cluster0.dhwacv3.mongodb.net/imtihon_bazasi?retryWrites=true&w=majority&appName=Cluster0";
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ MongoDB-ga muvaffaqiyatli ulandik!"))
+    .catch(err => console.error("❌ MongoDB ulanishida xato:", err));
+
+// --- 📊 MODELLAR ---
+const Test = mongoose.model('Test', new mongoose.Schema({
+    teacher: String,
+    questions: Array,
+    duration: Number,
+    subjectName: String,
+    createdAt: { type: Date, default: Date.now }
+}));
+
+const Result = mongoose.model('Result', new mongoose.Schema({
+    id: String,
+    name: String,
+    score: String,
+    subject: String,
+    teacher: String,
+    date: { type: String, default: () => new Date().toLocaleString('uz-UZ') }
+}));
+
+// Admin login (Vaqtinchalik)
 let admins = { "admin": "123" }; 
-let teacherTests = {}; 
-let completedResults = []; 
 
-// Ro'yxatdan o'tish uchun maxfiy kod
-const SECRET_CODE = "MAKTAB2026";
+// --- 🛠 YO'LAKLAR (ROUTES) ---
 
-// --- 🛠 ADMIN YO'LAKLARI ---
-
-// 1. Ro'yxatdan o'tish
-app.post('/api/admin/register', (req, res) => {
-    const { username, password, secretCode } = req.body;
-    if (secretCode !== SECRET_CODE) return res.status(403).json({ message: "Maxfiy kod xato!" });
-    if (admins[username]) return res.status(400).json({ message: "Bu login band!" });
-    
-    admins[username] = password;
-    res.json({ success: true });
-});
-
-// 2. Login
+// 1. Admin Login
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
     if (admins[username] && admins[username] === password) {
@@ -35,61 +46,71 @@ app.post('/api/admin/login', (req, res) => {
     }
 });
 
-// 3. Testni saqlash
-app.post('/api/admin/setup', (req, res) => {
-    const { teacher, questions, duration, subjectName } = req.body;
-    if (!teacher || !subjectName) return res.status(400).json({ message: "Ma'lumot to'liq emas!" });
-    
-    teacherTests[teacher] = { 
-        questions, 
-        duration, 
-        subjectName,
-        createdAt: new Date() 
-    };
-    console.log(`Test saqlandi: Ustoz - ${teacher}, Fan - ${subjectName}`);
-    res.json({ message: "Shaxsiy kabinetingizga saqlandi!" });
-});
-
-// 4. NATIJALARNI ADMINGA YUBORISH (Shu qism yetishmayotgan edi)
-app.get('/api/admin/results', (req, res) => {
-    res.json(completedResults);
-});
-
-// --- 🎓 STUDENT YO'LAKLARI ---
-
-// 1. Faol ustozlar ro'yxati
-app.get('/api/subjects', (req, res) => {
-    const activeTeachers = Object.keys(teacherTests);
-    res.json(activeTeachers);
-});
-
-// 2. Tanlangan ustozning testini yuklash
-app.get('/api/get-teacher-test/:teacherName', (req, res) => {
-    const teacher = req.params.teacherName;
-    if (teacherTests[teacher]) {
-        res.json(teacherTests[teacher]);
-    } else {
-        res.status(404).json({ message: "Test topilmadi!" });
+// 2. Testni saqlash (MongoDB-ga)
+app.post('/api/admin/setup', async (req, res) => {
+    try {
+        const { teacher, questions, duration, subjectName } = req.body;
+        await Test.findOneAndUpdate(
+            { teacher, subjectName },
+            { questions, duration, subjectName },
+            { upsert: true }
+        );
+        res.json({ message: "Test muvaffaqiyatli saqlandi!" });
+    } catch (err) {
+        res.status(500).json({ error: "Saqlashda xato yuz berdi" });
     }
 });
 
-// 3. Natijani qabul qilish (StudentPanel'dan keladi)
-app.post('/api/finish', (req, res) => {
-    const { id, name, score, subject, teacher } = req.body;
-    completedResults.push({ id, name, score, subject, teacher, date: new Date().toLocaleString() });
-    console.log(`Natija keldi: ${name} - ${score}`);
-    res.json({ message: "Natija qabul qilindi!" });
+// 3. Natijalarni ko'rish (Bazadan olish)
+app.get('/api/admin/results', async (req, res) => {
+    try {
+        const results = await Result.find().sort({ _id: -1 });
+        res.json(results);
+    } catch (err) {
+        res.status(500).json([]);
+    }
 });
 
-// Natijalarni qabul qilish uchun qo'shimcha (Alternativ yo'lak)
-app.post('/api/student/submit', (req, res) => {
-    const { id, name, score, subject, teacher, date } = req.body;
-    completedResults.push({ id, name, score, subject, teacher, date: date || new Date().toLocaleString() });
-    res.json({ success: true });
+// 4. Faol ustozlar
+app.get('/api/subjects', async (req, res) => {
+    try {
+        const tests = await Test.find({}, { teacher: 1 });
+        const activeTeachers = [...new Set(tests.map(t => t.teacher))];
+        res.json(activeTeachers);
+    } catch (err) {
+        res.status(500).json([]);
+    }
 });
 
-// Serverni yoqish
+// 5. Testni yuklash
+app.get('/api/get-teacher-test/:teacherName', async (req, res) => {
+    const test = await Test.findOne({ teacher: req.params.teacherName });
+    if (test) res.json(test);
+    else res.status(404).json({ message: "Test topilmadi" });
+});
+
+// 6. Natijani qabul qilish (StudentPanel-dan)
+app.post('/api/student/submit', async (req, res) => {
+    try {
+        const newResult = new Result(req.body);
+        await newResult.save();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// Eski manzil (Har ehtimolga qarshi)
+app.post('/api/finish', async (req, res) => {
+    try {
+        const newResult = new Result(req.body);
+        await newResult.save();
+        res.json({ message: "Saqlandi" });
+    } catch (err) {
+        res.status(500).send("Xato");
+    }
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`✅ Server ${PORT}-portda ishga tushdi!`);
-});
+app.listen(PORT, () => console.log(`🚀 Server ${PORT}-portda ishga tushdi!`));
+
